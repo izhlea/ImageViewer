@@ -158,7 +158,7 @@ public partial class Form1 : Form
         if (_fileService.Any)
         {
             using Font myFont = new Font("Arial", 14);
-            e.Graphics.DrawString($"Files count - {_fileService.Count}", myFont, Brushes.Yellow, new Point(2, 2));
+            e.Graphics.DrawString($"Количество файлов - {_fileService.Count}", myFont, Brushes.Yellow, new Point(2, 2));
         }
         else if (_fileService.HasDirectory)
         {
