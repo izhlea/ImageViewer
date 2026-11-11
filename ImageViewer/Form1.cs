@@ -102,6 +102,11 @@ public partial class Form1 : Form
         {
             _fileService.NextImage(Direction.Left);
         }
+
+        if (e.KeyCode == Keys.R)
+        {
+            _fileService.SetRandom();
+        }
     }
 
     private void FullScreen()
@@ -159,6 +164,7 @@ public partial class Form1 : Form
         {
             using Font myFont = new Font("Arial", 14);
             e.Graphics.DrawString($"Количество файлов - {_fileService.Count}", myFont, Brushes.Yellow, new Point(2, 2));
+            e.Graphics.DrawString($"{Path.GetFileName(_fileService.CurrentImage)}", myFont, Brushes.Yellow, new Point(2, 25));
         }
         else if (_fileService.HasDirectory)
         {
@@ -185,20 +191,7 @@ public partial class Form1 : Form
 
     private void Form1_FormClosing(object sender, FormClosingEventArgs e)
     {
-        //var path = $"{_directoryPath}\\deleted";
-
-        //if (Directory.Exists(path))
-        //{
-        //    pictureBox1.Load("empty.png");
-        //    var directory = new DirectoryInfo(path) { Attributes = FileAttributes.Normal };
-
-        //    foreach (var info in directory.GetFileSystemInfos("*", SearchOption.AllDirectories))
-        //    {
-        //        info.Attributes = FileAttributes.Normal;
-        //    }
-
-        //    directory.Delete(true);
-        //}
+        //_fileService.ClearDeletedFolder();
     }
 
     private Image LoadImageUnsafe(string path)

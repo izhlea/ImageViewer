@@ -1,4 +1,5 @@
-﻿using System.Drawing.Imaging;
+﻿using ImageViewer.Helpers;
+using System.Drawing.Imaging;
 
 namespace ImageViewer.Services;
 
@@ -17,6 +18,8 @@ internal class FileService
     private string _currentImage;
 
     public event EventHandler<string> CurrentImageChanged;
+
+    private bool _isRandom = false;
 
     public bool Any
     {
@@ -42,18 +45,50 @@ internal class FileService
         }
     }
 
+    public string CurrentImage
+    {
+        get
+        {
+            return _currentImage;
+        }
+    }
+
     public void SetDirectory(string path)
     {
         _directoryPath = path;
         _images = Directory.GetFiles(_directoryPath)
             .Where(IsImage)
             .ToList();
-        NextImage();
+
+        if (_isRandom)
+        {
+            NextImage();
+        }
+        else
+        {
+            NextImage(0);
+        }
     }
 
-    private static bool IsImage(string path)
+    public void SetRandom()
     {
-        return ImageExtensions.Contains(Path.GetExtension(path));
+        _isRandom = !_isRandom;
+    }
+
+    private void NextImage(int index)
+    {
+        if (!Any)
+        {
+            SetCurrentImage(Empty);
+            return;
+        }
+
+        if (index > _images.Count - 1)
+        {
+            index--;
+        }
+
+        SetCurrentImage(_images[index]);
     }
 
     public void NextImage(Direction direction = Direction.NotSet)
@@ -120,48 +155,23 @@ internal class FileService
             }
 
             File.Move(_currentImage, newLocation);
+
+            var index = _images.IndexOf(_currentImage);
+
             _images.Remove(_currentImage);
 
-            NextImage();
+            if (_isRandom)
+            {
+                NextImage();
+            }
+            else
+            {
+                NextImage(index);
+            }
 
             return true;
         }
         return false;
-    }
-
-    public bool RotateCurrentImage(RotateFlipType rotateType)
-    {
-        if (!Any || string.IsNullOrEmpty(_currentImage) || !File.Exists(_currentImage))
-        {
-            return false;
-        }
-
-        var bytes = File.ReadAllBytes(_currentImage);
-        var tempPath = $"{_currentImage}.rotating";
-
-        using (var stream = new MemoryStream(bytes))
-        using (var image = Image.FromStream(stream))
-        {
-            image.RotateFlip(rotateType);
-
-            if (GetImageFormat(_currentImage).Equals(ImageFormat.Jpeg))
-            {
-                var jpegEncoder = ImageCodecInfo.GetImageEncoders()
-                    .First(c => c.FormatID == ImageFormat.Jpeg.Guid);
-                using var encoderParams = new EncoderParameters(1);
-                encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 95L);
-                image.Save(tempPath, jpegEncoder, encoderParams);
-            }
-            else
-            {
-                image.Save(tempPath, GetImageFormat(_currentImage));
-            }
-        }
-
-        File.Move(tempPath, _currentImage, true);
-        SetCurrentImage(_currentImage);
-
-        return true;
     }
 
     public bool DeleteImage()
@@ -177,10 +187,20 @@ internal class FileService
             }
 
             File.Move(_currentImage, newLocation, true);
+
+            var index = _images.IndexOf(_currentImage);
+
             _images.Remove(_currentImage);
             _deletedImages.Push(newLocation);
 
-            NextImage();
+            if (_isRandom)
+            {
+                NextImage();
+            }
+            else
+            {
+                NextImage(index);
+            }
 
             return true;
         }
@@ -208,6 +228,78 @@ internal class FileService
             return true;
         }
         return false;
+    }
+
+    public bool RotateCurrentImage(RotateFlipType rotateType)
+    {
+        if (!Any || string.IsNullOrEmpty(_currentImage) || !File.Exists(_currentImage))
+        {
+            return false;
+        }
+
+        var bytes = File.ReadAllBytes(_currentImage);
+        var tempPath = $"{_currentImage}.rotating";
+
+        using (var stream = new MemoryStream(bytes))
+        using (var image = System.Drawing.Image.FromStream(stream))
+        {
+            var orientation = ExifOrientationHelper.Get(image);
+
+            if (orientation == 1)
+            {
+                image.RotateFlip(rotateType);
+            }
+            else
+            {
+                ExifOrientationHelper.Reset(image);
+                image.RotateFlip(rotateType);
+            }
+
+            if (GetImageFormat(_currentImage).Equals(ImageFormat.Jpeg))
+            {
+                var jpegEncoder = ImageCodecInfo.GetImageEncoders()
+                    .First(c => c.FormatID == ImageFormat.Jpeg.Guid);
+                using var encoderParams = new EncoderParameters(1);
+                encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 95L);
+                image.Save(tempPath, jpegEncoder, encoderParams);
+            }
+            else
+            {
+                image.Save(tempPath, GetImageFormat(_currentImage));
+            }
+        }
+
+        File.Move(tempPath, _currentImage, true);
+        SetCurrentImage(_currentImage);
+
+        return true;
+    }
+
+    public void ClearDeletedFolder()
+    {
+        if (!HasDirectory)
+        {
+            return;
+        }
+
+        var path = $"{_directoryPath}\\deleted";
+
+        if (Directory.Exists(path))
+        {
+            var directory = new DirectoryInfo(path) { Attributes = FileAttributes.Normal };
+
+            foreach (var info in directory.GetFileSystemInfos("*", SearchOption.AllDirectories))
+            {
+                info.Attributes = FileAttributes.Normal;
+            }
+
+            directory.Delete(true);
+        }
+    }
+
+    private static bool IsImage(string path)
+    {
+        return ImageExtensions.Contains(Path.GetExtension(path));
     }
 
     private static ImageFormat GetImageFormat(string path)
